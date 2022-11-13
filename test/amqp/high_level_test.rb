@@ -142,9 +142,14 @@ class HighLevelTest < Minitest::Test
     input_queue = client.queue("test.in")
     output_queue = client.queue("test.out")
     begin
-      input_queue.subscribe(no_ack: true) do |msg|
-        output_queue.publish("baz")
-        msgs.push msg
+
+      thread = Thread.new do
+        count = 0
+        input_queue.subscribe(worker_threads: 0, no_ack: true) do |msg|
+          output_queue.publish("baz")
+          msgs.push msg
+          Thread.exit if (count += 1) == 2
+        end
       end
 
       input_queue.publish("foo")
@@ -156,6 +161,8 @@ class HighLevelTest < Minitest::Test
       msg = msgs.pop
       assert_equal "test.in", msg.routing_key
       assert_equal "bar", msg.body
+
+      thread.join
     ensure
       input_queue.delete
       output_queue.delete
